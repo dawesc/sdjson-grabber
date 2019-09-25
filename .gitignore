@@ -9,3 +9,6 @@ target/
 /.settings/
 /.classpath
 /.project
+/src/main/java/com/xmltv
+/sd2xmlt/
+/sd2xmlt.json.zip

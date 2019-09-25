@@ -20,6 +20,9 @@ buildscript {
 	  }
 	  dependencies {
 		classpath 'org.ysb33r.gradle:bintray:1.6'
+		classpath 'net.saliman:gradle-cobertura-plugin:2.2.4'
+        classpath 'com.github.jacobono:gradle-jaxb-plugin:1.3.5'
+        classpath 'javax.activation:activation:1.1.1'
 	  }
 }
 import org.ysb33r.gradle.bintray.BintrayGenericUpload
@@ -40,7 +43,7 @@ versioning {
 }
 
 versionFile {
-	def props = new File(sourceSets.main.resources.srcDirs[0], 'sdjson-grabber-versioning.properties')
+	def props = new File(sourceSets.main.resources.srcDirs[0], 'sdjson2xmltv-grabber-versioning.properties')
 	outputs.file props
 	outputs.upToDateWhen { false }
 	file = props
@@ -48,8 +51,8 @@ versionFile {
 
 group = 'org.schedulesdirect'
 version = versioning.info.display
-sourceCompatibility = '1.7'
-mainClassName = 'org.schedulesdirect.grabber.Grabber'
+sourceCompatibility = '1.8'
+mainClassName = 'com.camding.schedulesdirect.xmltv.Sd2Xmlt'
 
 repositories {
 	mavenCentral()
@@ -57,6 +60,18 @@ repositories {
 	maven {
 		url 'https://oss.jfrog.org/artifactory/repo'
 	}
+}
+
+apply plugin: 'com.github.jacobono.jaxb'
+
+task downloadJarsToLibs(){
+	def libs = new File('libs')
+	if (!libs.exists())
+		libs.mkdirs()
+    def f = new File(libs, 'sdjson-grabber-0.20141201.2.jar')
+    if (!f.exists()) {
+        new URL('https://www.dropbox.com/s/cja49mm656u507z/sdjson-grabber-0.20141201.2.jar?dl=1').withInputStream{ i -> f.withOutputStream{ it << i }}
+    }    
 }
 
 dependencies {
@@ -73,19 +88,40 @@ dependencies {
 	compile 'com.beust:jcommander:1.35'
 	compile 'org.apache.commons:commons-lang3:3.0'
 	
+	compile 'com.sun.xml.bind:jaxb-xjc:2.3.2'
+	compile 'com.sun.xml.bind:jaxb-core:2.2.11'
+	compile 'com.sun.xml.bind:jaxb-impl:2.2.11'
+	compile 'javax.xml.bind:jaxb-api:2.2.12'
+    compile 'javax.activation:activation:1.1.1'
+    compile 'org.slf4j:slf4j-simple:1.7.28'
+	
+    compile fileTree(dir: 'libs', include: ['sdjson-grabber-0.20141201.2.jar'])
+             
 	testCompile 'org.powermock:powermock-module-junit4:1.5.4'
 	testCompile 'org.powermock:powermock-api-mockito:1.5.4'
+	
+	jaxb 'com.sun.xml.bind:jaxb-xjc:2.3.2'
+	jaxb 'com.sun.xml.bind:jaxb-core:2.2.11'
+	jaxb 'com.sun.xml.bind:jaxb-impl:2.2.11'
+	jaxb 'javax.xml.bind:jaxb-api:2.2.12'
+    jaxb 'javax.activation:activation:1.1.1'
+    jaxb 'org.slf4j:slf4j-simple:1.7.28'
+	jaxb 'org.jvnet.jaxb2_commons:jaxb2-basics-ant:0.12.0'
+    jaxb 'org.jvnet.jaxb2_commons:jaxb2-basics:0.12.0'
+    jaxb 'org.jvnet.jaxb2_commons:jaxb2-basics-annotate:1.1.0'
 }
 
 distTar {
 	compression = Compression.GZIP
 }
 
-task uploadSanityChecks << {
+task uploadSanityChecks { 
+  doLast {
 	assert System.getProperty('bintray.user')
 	assert System.getProperty('bintray.key')
 	assert versioning.info.branch.startsWith('release/')
 	assert !versioning.info.display.contains('-dirty')
+  }
 }
 
 task uploadArchives (type:BintrayGenericUpload) {
@@ -93,11 +129,34 @@ task uploadArchives (type:BintrayGenericUpload) {
 	apiKey      System.getProperty('bintray.key')
 	repoOwner   'slugger'
 	repoName    'generic'
-	packageName 'sdjson-grabber'
+	packageName 'sdjson2xmltv-grabber'
 	sources distZip.outputs.files
 	sources distTar.outputs.files
 	dependsOn uploadSanityChecks, distZip, distTar
 	onlyIf { !version.endsWith("SNAPSHOT") }
 }
 
-compileJava { inputs.file versionFile }
+=======
+task jaxb(){
+    description 'Converts xsds to classes'
+    def jaxbTargetDir = file('src/main/java')
+    doLast {
+	    jaxbTargetDir.mkdirs()
+	    ant.taskdef(name: 'xjc', classname: 'org.jvnet.jaxb2_commons.xjc.XJC2Task', classpath: configurations.jaxb.asPath)
+	    ant.jaxbTargetDir = jaxbTargetDir 
+	    ant.xjc(
+	    	destdir: '${jaxbTargetDir}', 
+	    	package: 'com.xmltv.xmltvschema', 
+	    	schema:'src/main/dtd/xmltv.dtd', 
+	    	extension:'true',
+	    	fork: true){
+	        arg(value: "-Xannotate")
+	        arg(value: "-dtd")
+       		jvmarg(value: '-DenableExternalEntityProcessing=true')
+        }
+    }
+}
+
+compileJava { 
+	inputs.file(versionFile.file)
+}
